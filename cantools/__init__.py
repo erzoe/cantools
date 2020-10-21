@@ -69,6 +69,7 @@ def _main():
     _load_subparser('convert', subparsers)
     _load_subparser('generate_c_source', subparsers)
     _load_subparser('plot', subparsers)
+    _load_subparser('cli', subparsers)
 
     args = parser.parse_args()
 
