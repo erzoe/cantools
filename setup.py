@@ -37,5 +37,5 @@ setup(name='cantools',
       ),
       test_suite="tests",
       entry_points = {
-          'console_scripts': ['cantools=cantools.__init__:_main']
+          'console_scripts': ['cantools=cantools:_main']
       })
