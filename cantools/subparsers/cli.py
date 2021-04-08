@@ -7,19 +7,33 @@ from .utils import format_message
 from .utils import format_multiplexed_name
 
 
-class QuitError(Exception):
+class QuitException(Exception):
     pass
 
 
 class Cli:
 
+    list_item_message = "- 0x{msg.frame_id:03x} {msg.name}"
+    reo_hex = re.compile("[0-9a-f]+", re.I)
+
+    # ------- init -------
+
     def __init__(self, args):
-        self._dbase = database.load_file(args.database,
+        self.dbc = database.load_file(args.database,
                                          encoding=args.encoding,
                                          frame_id_mask=args.frame_id_mask,
                                          strict=not args.no_strict)
 
         self.bus = self.create_bus(args)
+        self.prompt = args.prompt
+
+        self.internal_commands = {
+            'quit' : self.quit,
+            'q'    : self.quit,
+            'help' : self.help,
+            'h'    : self.help,
+            '?'    : self.help,
+        }
         self.run()
 
     def create_bus(self, args):
@@ -38,15 +52,104 @@ class Cli:
                 "channel='{}'.".format(args.bus_type,
                                        args.channel))
 
-    def run(self):
-        print("hello world")
+    # ------- main -------
 
+    def run(self):
+        while True:
+            try:
+                ln = self.read_line()
+                self.process_line(ln)
+            except QuitException:
+                break
+            except Exception:
+                raise
+
+    def read_line(self):
+        return input(self.prompt)
+
+    def process_line(self, ln):
+        cmd, args = self.split(ln)
+        if self.process_internal_command(cmd, args):
+            return
+        if self.process_message_to_be_sent(cmd, args):
+            return
+
+    def split(self, cmd):
+        cmd = cmd.split(' ')
+        return cmd[0], cmd[1:]
+
+    def process_internal_command(self, cmd, args):
+        cmd = self.internal_commands.get(cmd, None)
+        if cmd:
+            cmd(args)
+            return True
+        return False
+
+    def process_message_to_be_sent(self, cmd, args):
+        possible_messages = list(self.find_messages(cmd))
+        n = len(possible_messages)
+        if n <= 0:
+            print("command {cmd:r} not found".format(cmd=cmd))
+        elif n > 1:
+            print("command {cmd:r} is ambiguous:".format(cmd=cmd))
+            self.print_message_list(possible_messages)
+
+        msg = possible_messages[0]
+        print(msg)
+
+        #TODO: process args
+        #data = msg.encode(args)
+
+
+    def find_messages(self, cmd_input):
+        if self.is_int(cmd_input):
+            yield from self.find_messages_by_id(self.parse_int(cmd_input))
+        else:
+            yield from self.find_messages_by_name(cmd_input)
+
+    def find_messages_by_id(self, msg_id):
+        for msg in self.dbc.messages:
+            if msg.frame_id == msg_id:
+                yield msg
+                return
+
+    def find_messages_by_name(self, cmd_input):
+        reo = re.compile('.*'+re.escape(cmd_input)+'.*', re.I)
+        for msg in self.dbc.messages:
+            if reo.match(msg.name):
+                yield msg
+
+
+    # ------- utils -------
+
+    def is_int(self, text):
+        return text[:1].isdigit()
+
+    def parse_int(self, text):
+        return int(text, 16)
+
+    def print_message_list(self, messages):
+        for msg in sorted(messages, key=lambda msg: msg.frame_id):
+            print(self.list_item_message.format(msg=msg))
+
+
+    # ------- internal commands -------
+
+    def quit(self, args):
+        raise QuitException()
+
+    def help(self, args):
+        self.print_message_list(self.dbc.messages)
 
 
 def add_subparser(subparsers):
     monitor_parser = subparsers.add_parser(
         'cli',
         description='Send CAN bus messages via a command line interface.')
+    monitor_parser.add_argument(
+        '--prompt',
+        default='>>> ',
+        help='The string to show when waiting for input.')
     monitor_parser.add_argument(
         '-e', '--encoding',
         help='File encoding.')
