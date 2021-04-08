@@ -1,4 +1,5 @@
 import re
+import argparse
 
 import can
 from argparse_addons import Integer
@@ -27,13 +28,13 @@ class Cli:
         self.bus = self.create_bus(args)
         self.prompt = args.prompt
 
-        self.internal_commands = {
-            'quit' : self.quit,
-            'q'    : self.quit,
-            'help' : self.help,
-            'h'    : self.help,
-            '?'    : self.help,
-        }
+        Command.cli = self
+        self.internal_commands = {}
+        for cmd in globals().values():
+            if self.issubclass(cmd, Command):
+                self.internal_commands[cmd.get_name()] = cmd
+                for alias in cmd.aliases:
+                    self.internal_commands[alias] = cmd
         self.run()
 
     def create_bus(self, args):
@@ -59,6 +60,8 @@ class Cli:
             try:
                 ln = self.read_line()
                 self.process_line(ln)
+            except ArgumentError as e:
+                print(e)
             except QuitException:
                 break
             except Exception:
@@ -122,6 +125,15 @@ class Cli:
 
     # ------- utils -------
 
+    @staticmethod
+    def issubclass(v, cls):
+        if v is cls:
+            return False
+        try:
+            return issubclass(v, cls)
+        except TypeError:
+            return False
+
     def is_int(self, text):
         return text[:1].isdigit()
 
@@ -133,14 +145,79 @@ class Cli:
             print(self.list_item_message.format(msg=msg))
 
 
-    # ------- internal commands -------
+# ========== utils ==========
 
-    def quit(self, args):
+class ArgumentError(Exception):
+
+    pass
+
+class NotExitingArgumentParser(argparse.ArgumentParser):
+
+    def error(self, message):
+        raise ArgumentError(message)
+
+class Command:
+    """Abstract command class"""
+
+    parser = None
+    aliases = ()
+
+    # ------- class methods -------
+
+    @classmethod
+    def get_name(cls):
+        classdict = cls.__mro__[0].__dict__
+        if 'name' in classdict and classdict['name']:
+            return cls.name
+        return cls.__name__
+
+    @classmethod
+    def create_parser(cls):
+        cls.parser = NotExitingArgumentParser(prog=cls.get_name(), description=__doc__, add_help=False)
+        cls.init_parser(cls.parser)
+
+    @classmethod
+    def init_parser(cls, parser):
+        """override this method if the command takes arguments"""
+        pass
+
+
+    # ------- instance methods -------
+
+    def __init__(self, args):
+        if self.parser is None:
+            self.create_parser()
+        args = self.parser.parse_args(args)
+        self.execute(args)
+
+    def execute(self, args):
+        """
+        override this method
+
+        args: argparse.Namespace instance
+        """
+        pass
+
+
+# ========== internal commands ==========
+
+class quit(Command):
+
+    aliases = ["q"]
+
+    def execute(self, args):
         raise QuitException()
 
-    def help(self, args):
-        self.print_message_list(self.dbc.messages)
+class help_(Command):
 
+    name = "help"
+    aliases = ["h", "?"]
+
+    def execute(self, args):
+        self.cli.print_message_list(self.cli.dbc.messages)
+
+
+# ========== command line arguments ==========
 
 def add_subparser(subparsers):
     monitor_parser = subparsers.add_parser(
