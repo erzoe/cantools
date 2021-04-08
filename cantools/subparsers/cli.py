@@ -181,7 +181,7 @@ class Command:
     @classmethod
     def init_parser(cls, parser):
         """override this method if the command takes arguments"""
-        pass
+        parser.add_argument("-h", "--help", action="store_true", help="show this help message")
 
 
     # ------- instance methods -------
@@ -190,6 +190,9 @@ class Command:
         if self.parser is None:
             self.create_parser()
         args = self.parser.parse_args(args)
+        if args.help:
+            self.parser.print_help()
+            return
         self.execute(args)
 
     def execute(self, args):
