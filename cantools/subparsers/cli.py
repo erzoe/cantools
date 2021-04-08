@@ -92,10 +92,12 @@ class Cli:
         possible_messages = list(self.find_messages(cmd))
         n = len(possible_messages)
         if n <= 0:
-            print("command {cmd:r} not found".format(cmd=cmd))
+            print("command {cmd!r} not found".format(cmd=cmd))
+            return
         elif n > 1:
-            print("command {cmd:r} is ambiguous:".format(cmd=cmd))
+            print("command {cmd!r} is ambiguous:".format(cmd=cmd))
             self.print_message_list(possible_messages)
+            return
 
         msg = possible_messages[0]
         print(msg)
