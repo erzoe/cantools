@@ -11,6 +11,12 @@ from .utils import format_multiplexed_name
 class QuitException(Exception):
     pass
 
+class CanBusListener(can.Listener):
+
+    def __init__(self, on_receive, on_error=None):
+        self.on_message_received = on_receive
+        if on_error:
+            self.on_error = on_error
 
 class Cli:
 
@@ -30,6 +36,7 @@ class Cli:
                                          strict=not args.no_strict)
 
         self.bus = self.create_bus(args)
+        self.register_bus_listener(self.bus)
         self.prompt = args.prompt
 
         Command.cli = self
@@ -56,6 +63,10 @@ class Cli:
                 "Failed to create CAN bus with bustype='{}' and "
                 "channel='{}'.".format(args.bus_type,
                                        args.channel))
+
+    def register_bus_listener(self, bus):
+        can.Notifier(bus, [CanBusListener(self.on_receive, self.on_error)])
+
 
     # ------- main -------
 
@@ -189,6 +200,18 @@ class Cli:
         for sig in msg.signals:
             if reo.match(sig.name):
                 yield sig
+
+    # ------- CAN bus events -------
+
+    def on_receive(self, msg):
+        print('\r', end='')
+        print(msg)
+        print(self.prompt, end='', flush=True)
+
+    def on_error(self, error):
+        print('\r', end='')
+        print(error)
+        print(self.prompt, end='', flush=True)
 
 
     # ------- utils -------
