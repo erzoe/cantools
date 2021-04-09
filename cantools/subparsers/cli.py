@@ -118,7 +118,10 @@ class Cli:
         msg = possible_messages[0]
         data = self.parse_data(msg, args)
         is_remote_frame = not data
-        data = msg.encode(data)
+        if data:
+            data = msg.encode(data)
+        else:
+            data = []
         canmsg = can.Message(
             arbitration_id = msg.frame_id,
             is_extended_id = msg.is_extended_frame,
