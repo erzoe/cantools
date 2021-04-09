@@ -1,5 +1,6 @@
 import re
 import argparse
+import readline
 
 import can
 from argparse_addons import Integer
