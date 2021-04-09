@@ -15,7 +15,11 @@ class QuitException(Exception):
 class Cli:
 
     list_item_message = "- 0x{msg.frame_id:03x} {msg.name}"
+    list_item_signal  = "- {sig.name} (start bit {sig.start}, {sig.length} bit long)"
+    list_item_choice  = "- {val}: {key}"
     reo_hex = re.compile("[0-9a-f]+", re.I)
+    # separator between signal name and value
+    sep = "="
 
     # ------- init -------
 
@@ -60,7 +64,7 @@ class Cli:
             try:
                 ln = self.read_line()
                 self.process_line(ln)
-            except ArgumentError as e:
+            except ParseError as e:
                 print(e)
             except QuitException:
                 break
@@ -100,11 +104,56 @@ class Cli:
             return
 
         msg = possible_messages[0]
-        print(msg)
+        data = self.parse_data(msg, args)
+        is_remote_frame = not data
+        data = msg.encode(data)
+        canmsg = can.Message(
+            arbitration_id = msg.frame_id,
+            is_extended_id = msg.is_extended_frame,
+            is_remote_frame = is_remote_frame,
+            data = data,
+        )
+        print(canmsg)
+        self.bus.send(canmsg)
 
-        #TODO: process args
-        #data = msg.encode(args)
 
+    def parse_data(self, msg, args):
+        '''args: a list of strings representing the data. return: dict'''
+        data = {}
+        positional = True
+        for i, arg in enumerate(args):
+            if self.sep in arg:
+                key, strval = arg.split(self.sep)
+                sig = self.find_signal_by_name(msg, key)
+                positional = False
+            elif positional:
+                if i >= len(msg.signals):
+                    raise ParseError('you have passed more values than this message has signals')
+                else:
+                    sig = msg.signals[i]
+                    strval = arg
+            else:
+                raise ParseError('positional argument follows keyword argument')
+
+            if sig.choices:
+                val = sig.choice_string_to_number(strval)
+            else:
+                val = None
+            if val is None:
+                try:
+                    val = self.parse_number(strval)
+                except ParseError as e:
+                    msg = str(e)
+                    if sig.choices:
+                        if not msg.endswith('.'):
+                            msg += '.'
+                        msg += ' valid choices are:\n'
+                        msg += '\n'.join(self.list_item_choice.format(key=key, val=val) for val, key in sig.choices.items())
+                    raise ParseError(msg)
+
+            data[sig.name] = val
+
+        return data
 
     def find_messages(self, cmd_input):
         if self.is_int(cmd_input):
@@ -124,6 +173,23 @@ class Cli:
             if reo.match(msg.name):
                 yield msg
 
+    def find_signal_by_name(self, msg, name):
+        signals = list(self.find_signals_by_name(msg, name))
+        n = len(signals)
+        if n <= 0:
+            raise ParseError('unknown signal %r for message %s' % (name, msg))
+        elif n > 1:
+            error = 'signal %r for message %s is ambiguous:\n' % (name, msg)
+            error += '\n'.join(self.list_item_signal.format(sig=sig) for sig in signals)
+            raise ParseError(error)
+        return signals[0]
+
+    def find_signals_by_name(self, msg, name):
+        reo = re.compile('.*'+re.escape(name)+'.*', re.I)
+        for sig in msg.signals:
+            if reo.match(sig.name):
+                yield sig
+
 
     # ------- utils -------
 
@@ -142,6 +208,17 @@ class Cli:
     def parse_int(self, text):
         return int(text, 16)
 
+    def parse_number(self, text):
+        try:
+            return int(text, base=0)
+        except ValueError:
+            pass
+        try:
+            return float(text)
+        except ValueError:
+            pass
+        raise ParseError('failed to parse number %r' % text)
+
     def print_message_list(self, messages):
         for msg in sorted(messages, key=lambda msg: msg.frame_id):
             print(self.list_item_message.format(msg=msg))
@@ -149,14 +226,14 @@ class Cli:
 
 # ========== utils ==========
 
-class ArgumentError(Exception):
+class ParseError(Exception):
 
     pass
 
 class NotExitingArgumentParser(argparse.ArgumentParser):
 
     def error(self, message):
-        raise ArgumentError(message)
+        raise ParseError(message)
 
 class Command:
     """Abstract command class"""
