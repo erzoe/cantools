@@ -21,8 +21,6 @@ class CanBusListener(can.Listener):
 
 class Cli:
 
-    list_item_message = "- 0x{msg.frame_id:03x} {msg.name}"
-    list_item_signal  = "- {sig.name} (start bit {sig.start}, {sig.length} bit long)"
     list_item_choice  = "- {val}: {key}"
     reo_hex = re.compile("[0-9a-f]+", re.I)
     # separator between signal name and value
@@ -112,7 +110,7 @@ class Cli:
             return
         elif n > 1:
             print("command {cmd!r} is ambiguous:".format(cmd=cmd))
-            self.print_message_list(possible_messages)
+            help_.print_message_list(possible_messages)
             return
 
         msg = possible_messages[0]
@@ -195,7 +193,7 @@ class Cli:
             raise ParseError('unknown signal %r for message %s' % (name, msg))
         elif n > 1:
             error = 'signal %r for message %s is ambiguous:\n' % (name, msg)
-            error += '\n'.join(self.list_item_signal.format(sig=sig) for sig in signals)
+            error += '\n'.join(help_.format_signal(sig) for sig in sorted(signals, key=lambda s: s.name))
             raise ParseError(error)
         return signals[0]
 
@@ -245,10 +243,6 @@ class Cli:
         except ValueError:
             pass
         raise ParseError('failed to parse number %r' % text)
-
-    def print_message_list(self, messages):
-        for msg in sorted(messages, key=lambda msg: msg.frame_id):
-            print(self.list_item_message.format(msg=msg))
 
 
 # ========== utils ==========
@@ -319,11 +313,143 @@ class quit(Command):
 
 class help_(Command):
 
+    ORDER_BY_ID = "id"
+    ORDER_BY_NAME = "name"
+    ALLOWED_VALUES_ORDER_BY = [
+        ORDER_BY_ID,
+        ORDER_BY_NAME,
+    ]
+
+    indentation = " " * 4
+
     name = "help"
     aliases = ["h", "?"]
 
+    @classmethod
+    def init_parser(cls, parser):
+        super().init_parser(parser)
+        parser.add_argument('msg', nargs='?')
+
+        msg_order_args = parser.add_argument_group("message order")
+        msg_order_args.add_argument('--order-by', choices=cls.ALLOWED_VALUES_ORDER_BY)
+        msg_order_args.add_argument('--descending', action='store_true')
+
+        sig_args = parser.add_argument_group("signal format")
+        #sig_args.add_argument('--oneline', action='store_false', dest='multiline', help='print all information regarding one signal in one line')
+        sig_args.add_argument('-m', '--multiline', action='store_true', help='break the information regarding a signal across several lines')
+        sig_args.add_argument('-a', '--all', action='store_true', help='show all information')
+        sig_args.add_argument('--datatype', action='store_true', help='show is_signed and is_float')
+        sig_args.add_argument('--min-max', action='store_true', help='show minimum and maximum value if specified')
+        sig_args.add_argument('--bits', action='store_true', help='show start bit, length and endianness')
+
     def execute(self, args):
-        self.cli.print_message_list(self.cli.dbc.messages)
+        if args.all:
+            args.datatype = True
+            args.min_max = True
+            args.bits = True
+        msglistkw = dict(order_by=args.order_by, descending=args.descending)
+        signalkw = dict(multiline=args.multiline, show_datatype=args.datatype, show_min_max=args.min_max, show_bits=args.bits)
+        if args.msg:
+            messages = list(self.cli.find_messages(args.msg))
+            n = len(messages)
+            if n <= 0:
+                print("unknown message {cmd!r}".format(cmd=args.msg))
+            elif n > 1:
+                print("{cmd!r} is ambiguous:".format(cmd=args.msg))
+                self.print_message_list(messages, **msglistkw, signalkw=signalkw)
+            else:
+                msg = messages[0]
+                self.print_message_help(msg, bullet="", signalkw=signalkw)
+        else:
+            self.print_message_list(self.cli.dbc.messages, **msglistkw)
+
+
+    @classmethod
+    def print_message_list(cls, messages, indent=0, bullet="- ", order_by=ORDER_BY_ID, descending=False, signalkw=None):
+        if order_by == cls.ORDER_BY_NAME:
+            key = lambda msg: msg.name
+        else:
+            key = lambda msg: msg.frame_id
+
+        for msg in sorted(messages, key=key, reverse=descending):
+            cls.print_message_help(msg, indent=indent, bullet=bullet, signalkw=signalkw)
+
+    @classmethod
+    def print_message_help(cls, msg, indent=0, bullet="", signalkw={}):
+        print(cls.format_message(msg, bullet=bullet, indent=indent))
+        if signalkw is None:
+            return
+        for sig in msg.signals:
+            print(cls.format_signal(sig, indent=indent+1, **signalkw))
+
+
+    @classmethod
+    def format_message(cls, msg, indent=0, bullet="- ", show_dlc=True):
+        #TODO: display name first if ORDER_BY_NAME
+        #TODO: show transmitter
+        out = cls.indentation * indent
+        out += bullet
+        out += "0x%03x %s" % (msg.frame_id, msg.name)
+        if show_dlc:
+            out += " (DLC=%s)" % msg.length
+        return out
+
+    @classmethod
+    def format_signal(cls, sig, indent=0, bullet="- ", multiline=True,
+            show_datatype=True, show_bits=False, show_min_max=True):
+        if multiline:
+            newline = "\n" + cls.indentation*indent + " "*len(bullet)
+        else:
+            newline = ". "
+
+        #TODO: multiplexing missing
+        #TODO: receiver missing
+
+        # line 1
+        out = cls.indentation * indent
+        out += bullet
+        out += "%s" % sig.name
+
+        if show_datatype:
+            if sig.is_signed:
+                out += ": signed"
+            else:
+                out += ": unsigned"
+            if sig.is_float:
+                out += " float"
+            else:
+                out += " int"
+
+        if sig.scale != 1 or sig.unit:
+            out += " in "
+            if sig.scale != 1:
+                out += "%s" % sig.scale
+            if sig.unit:
+                out += "%s" % sig.unit
+        if sig.offset:
+            out += ", offset: %s" % sig.offset
+
+        # next line
+        if sig.choices:
+            out += newline
+            out += "possible values: %s" % ", ".join("%s=%s" % (val,text) for val,text in sig.choices.items())
+
+        # next line
+        if show_min_max and (sig.minimum or sig.maximum):
+            out += newline
+            out += "min: %s, max: %s" % (sig.minimum, sig.maximum)
+
+        # next line
+        if show_bits:
+            out += newline
+            out += "start bit: %s, %s bit(s) long, %s" % (sig.start, sig.length, sig.byte_order)
+
+        # next line
+        if sig.comment:
+            out += newline
+            out += "%s" % sig.comment
+
+        return out
 
 
 # ========== command line arguments ==========
