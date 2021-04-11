@@ -370,24 +370,24 @@ class help_(Command):
                 self.print_message_list(messages, **msglistkw, signalkw=signalkw)
             else:
                 msg = messages[0]
-                self.print_message_help(msg, bullet="", signalkw=signalkw)
+                self.print_message_help(msg, bullet="", **msglistkw, signalkw=signalkw)
         else:
             self.print_message_list(self.cli.dbc.messages, **msglistkw)
 
 
     @classmethod
-    def print_message_list(cls, messages, indent=0, bullet="- ", order_by=ORDER_BY_ID, descending=False, signalkw=None):
+    def print_message_list(cls, messages, indent=0, bullet="- ", order_by=ORDER_BY_ID, descending=False, show_dlc=True, signalkw=None):
         if order_by == cls.ORDER_BY_NAME:
             key = lambda msg: msg.name
         else:
             key = lambda msg: msg.frame_id
 
         for msg in sorted(messages, key=key, reverse=descending):
-            cls.print_message_help(msg, indent=indent, bullet=bullet, signalkw=signalkw)
+            cls.print_message_help(msg, indent=indent, bullet=bullet, show_dlc=show_dlc, order_by=order_by, descending=descending, signalkw=signalkw)
 
     @classmethod
-    def print_message_help(cls, msg, indent=0, bullet="", signalkw={}):
-        print(cls.format_message(msg, bullet=bullet, indent=indent))
+    def print_message_help(cls, msg, indent=0, bullet="", show_dlc=True, order_by=ORDER_BY_ID, descending=False, signalkw={}):
+        print(cls.format_message(msg, bullet=bullet, show_dlc=show_dlc, order_by=order_by, descending=descending, indent=indent))
         if signalkw is None:
             return
         for sig in msg.signals:
@@ -395,12 +395,14 @@ class help_(Command):
 
 
     @classmethod
-    def format_message(cls, msg, indent=0, bullet="- ", show_dlc=True):
-        #TODO: display name first if ORDER_BY_NAME
+    def format_message(cls, msg, indent=0, bullet="- ", show_dlc=True, order_by=ORDER_BY_ID, descending=False):
         #TODO: show transmitter
         out = cls.indentation * indent
         out += bullet
-        out += "0x%03x %s" % (msg.frame_id, msg.name)
+        if order_by == cls.ORDER_BY_NAME:
+            out += "%s (0x%03x)" % (msg.name, msg.frame_id)
+        else:
+            out += "0x%03x %s" % (msg.frame_id, msg.name)
         if show_dlc:
             out += " (DLC=%s)" % msg.length
         return out
