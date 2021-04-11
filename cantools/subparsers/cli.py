@@ -337,9 +337,10 @@ class help_(Command):
         super().init_parser(parser)
         parser.add_argument('msg', nargs='?', help='a message you want help with')
 
-        msg_order_args = parser.add_argument_group("message order")
-        msg_order_args.add_argument('--order-by', choices=cls.ALLOWED_VALUES_ORDER_BY)
-        msg_order_args.add_argument('--descending', action='store_true')
+        msg_order_args = parser.add_argument_group("message arguments")
+        msg_order_args.add_argument('--order-by', choices=cls.ALLOWED_VALUES_ORDER_BY, help='sort messages (default: id)')
+        msg_order_args.add_argument('--descending', action='store_true', help='sort messages descending')
+        msg_order_args.add_argument('--transmitters', action='store_true', help='show transmitters')
 
         sig_args = parser.add_argument_group("signal format")
         #sig_args.add_argument('--oneline', action='store_false', dest='multiline', help='print all information regarding one signal in one line')
@@ -356,7 +357,7 @@ class help_(Command):
             args.min_max = True
             args.bits = True
             args.receivers = True
-        msglistkw = dict(order_by=args.order_by, descending=args.descending)
+        msglistkw = dict(order_by=args.order_by, descending=args.descending, show_transmitter=args.transmitters)
         signalkw = dict(multiline=args.multiline, show_datatype=args.datatype, show_min_max=args.min_max, show_bits=args.bits, show_receivers=args.receivers)
         if args.msg == '*':
             self.print_message_list(self.cli.dbc.messages, **msglistkw, signalkw=signalkw)
@@ -376,18 +377,18 @@ class help_(Command):
 
 
     @classmethod
-    def print_message_list(cls, messages, indent=0, bullet="- ", order_by=ORDER_BY_ID, descending=False, show_dlc=True, signalkw=None):
+    def print_message_list(cls, messages, indent=0, bullet="- ", order_by=ORDER_BY_ID, descending=False, show_dlc=True, show_transmitter=False, signalkw=None):
         if order_by == cls.ORDER_BY_NAME:
             key = lambda msg: msg.name
         else:
             key = lambda msg: msg.frame_id
 
         for msg in sorted(messages, key=key, reverse=descending):
-            cls.print_message_help(msg, indent=indent, bullet=bullet, show_dlc=show_dlc, order_by=order_by, descending=descending, signalkw=signalkw)
+            cls.print_message_help(msg, indent=indent, bullet=bullet, show_dlc=show_dlc, show_transmitter=show_transmitter, order_by=order_by, descending=descending, signalkw=signalkw)
 
     @classmethod
-    def print_message_help(cls, msg, indent=0, bullet="", show_dlc=True, order_by=ORDER_BY_ID, descending=False, signalkw={}):
-        print(cls.format_message(msg, bullet=bullet, show_dlc=show_dlc, order_by=order_by, descending=descending, indent=indent))
+    def print_message_help(cls, msg, indent=0, bullet="", show_dlc=True, show_transmitter=False, order_by=ORDER_BY_ID, descending=False, signalkw={}):
+        print(cls.format_message(msg, bullet=bullet, show_dlc=show_dlc, show_transmitter=show_transmitter, order_by=order_by, descending=descending, indent=indent))
         if signalkw is None:
             return
         for sig in msg.signals:
@@ -395,20 +396,39 @@ class help_(Command):
 
 
     @classmethod
-    def format_message(cls, msg, indent=0, bullet="- ", show_dlc=True, order_by=ORDER_BY_ID, descending=False):
-        #TODO: show transmitter
+    def format_message(cls, msg, indent=0, bullet="- ", show_dlc=True, show_transmitter=False, order_by=ORDER_BY_ID, descending=False):
         out = cls.indentation * indent
         out += bullet
+
+        if show_dlc:
+            dlc = "DLC=%s" % msg.length
+        else:
+            dlc = ""
+
+        if show_transmitter and msg.senders:
+            sent_by = "sent by %s" % ", ".join(msg.senders)
+        else:
+            sent_by = ""
+
         if order_by == cls.ORDER_BY_NAME:
             out += "%s (0x%03x" % (msg.name, msg.frame_id)
-            if show_dlc:
-                out += ", DLC=%s)" % msg.length
-            else:
-                out += ")"
+            if dlc:
+                out += ", %s" % dlc
+            if sent_by:
+                out += ", %s" % sent_by
+            out += ")"
         else:
             out += "0x%03x %s" % (msg.frame_id, msg.name)
-            if show_dlc:
-                out += " (DLC=%s)" % msg.length
+            if dlc or sent_by:
+                out += " ("
+                if dlc:
+                    out += dlc
+                    if sent_by:
+                        out += ", "
+                if sent_by:
+                    out += sent_by
+                out += ")"
+
         return out
 
     @classmethod
