@@ -313,6 +313,13 @@ class quit(Command):
 
 class help_(Command):
 
+    """
+    Print a list of all defined messages (if no message is given)
+    or a list of all signals (if msg is given).
+    If an asterisc is passed for msg a list of all messages
+    with all signals is printed.
+    """
+
     ORDER_BY_ID = "id"
     ORDER_BY_NAME = "name"
     ALLOWED_VALUES_ORDER_BY = [
@@ -328,7 +335,7 @@ class help_(Command):
     @classmethod
     def init_parser(cls, parser):
         super().init_parser(parser)
-        parser.add_argument('msg', nargs='?')
+        parser.add_argument('msg', nargs='?', help='a message you want help with')
 
         msg_order_args = parser.add_argument_group("message order")
         msg_order_args.add_argument('--order-by', choices=cls.ALLOWED_VALUES_ORDER_BY)
@@ -349,7 +356,9 @@ class help_(Command):
             args.bits = True
         msglistkw = dict(order_by=args.order_by, descending=args.descending)
         signalkw = dict(multiline=args.multiline, show_datatype=args.datatype, show_min_max=args.min_max, show_bits=args.bits)
-        if args.msg:
+        if args.msg == '*':
+            self.print_message_list(self.cli.dbc.messages, **msglistkw, signalkw=signalkw)
+        elif args.msg:
             messages = list(self.cli.find_messages(args.msg))
             n = len(messages)
             if n <= 0:
