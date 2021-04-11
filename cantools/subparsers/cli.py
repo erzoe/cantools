@@ -336,6 +336,7 @@ class help_(Command):
     def init_parser(cls, parser):
         super().init_parser(parser)
         parser.add_argument('msg', nargs='?', help='a message you want help with')
+        parser.add_argument('-a', '--all', action='store_true', help='show all information')
 
         msg_order_args = parser.add_argument_group("message arguments")
         msg_order_args.add_argument('--order-by', choices=cls.ALLOWED_VALUES_ORDER_BY, help='sort messages (default: id)')
@@ -345,7 +346,6 @@ class help_(Command):
         sig_args = parser.add_argument_group("signal format")
         #sig_args.add_argument('--oneline', action='store_false', dest='multiline', help='print all information regarding one signal in one line')
         sig_args.add_argument('-m', '--multiline', action='store_true', help='break the information regarding a signal across several lines')
-        sig_args.add_argument('-a', '--all', action='store_true', help='show all information')
         sig_args.add_argument('--datatype', action='store_true', help='show is_signed and is_float')
         sig_args.add_argument('--min-max', action='store_true', help='show minimum and maximum value if specified')
         sig_args.add_argument('--bits', action='store_true', help='show start bit, length and endianness')
@@ -357,6 +357,7 @@ class help_(Command):
             args.min_max = True
             args.bits = True
             args.receivers = True
+            args.transmitters = True
         msglistkw = dict(order_by=args.order_by, descending=args.descending, show_transmitter=args.transmitters)
         signalkw = dict(multiline=args.multiline, show_datatype=args.datatype, show_min_max=args.min_max, show_bits=args.bits, show_receivers=args.receivers)
         if args.msg == '*':
