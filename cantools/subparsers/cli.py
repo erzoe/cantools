@@ -402,13 +402,15 @@ class help_(Command):
         else:
             newline = ". "
 
-        #TODO: multiplexing missing
         #TODO: receiver missing
 
         # line 1
         out = cls.indentation * indent
         out += bullet
         out += "%s" % sig.name
+
+        if sig.is_multiplexer:
+            out += " [multiplexer]"
 
         if show_datatype:
             if sig.is_signed:
@@ -443,6 +445,15 @@ class help_(Command):
         if show_bits:
             out += newline
             out += "start bit: %s, %s bit(s) long, %s" % (sig.start, sig.length, sig.byte_order)
+
+        # next line
+        if sig.multiplexer_ids:
+            if len(sig.multiplexer_ids) == 1:
+                muxed = "%s == %s" % (sig.multiplexer_signal, sig.multiplexer_ids[0])
+            else:
+                muxed = "%s is one of %s" % (sig.multiplexer_signal, ", ".join("%s"%mid for mid in sig.multiplexer_ids))
+            out += newline
+            out += "if %s" % muxed
 
         # next line
         if sig.comment:
