@@ -348,14 +348,16 @@ class help_(Command):
         sig_args.add_argument('--datatype', action='store_true', help='show is_signed and is_float')
         sig_args.add_argument('--min-max', action='store_true', help='show minimum and maximum value if specified')
         sig_args.add_argument('--bits', action='store_true', help='show start bit, length and endianness')
+        sig_args.add_argument('--receivers', action='store_true', help='show receivers if specified')
 
     def execute(self, args):
         if args.all:
             args.datatype = True
             args.min_max = True
             args.bits = True
+            args.receivers = True
         msglistkw = dict(order_by=args.order_by, descending=args.descending)
-        signalkw = dict(multiline=args.multiline, show_datatype=args.datatype, show_min_max=args.min_max, show_bits=args.bits)
+        signalkw = dict(multiline=args.multiline, show_datatype=args.datatype, show_min_max=args.min_max, show_bits=args.bits, show_receivers=args.receivers)
         if args.msg == '*':
             self.print_message_list(self.cli.dbc.messages, **msglistkw, signalkw=signalkw)
         elif args.msg:
@@ -405,13 +407,11 @@ class help_(Command):
 
     @classmethod
     def format_signal(cls, sig, indent=0, bullet="- ", multiline=True,
-            show_datatype=True, show_bits=False, show_min_max=True):
+            show_datatype=True, show_bits=False, show_min_max=True, show_receivers=False):
         if multiline:
             newline = "\n" + cls.indentation*indent + " "*len(bullet)
         else:
             newline = ". "
-
-        #TODO: receiver missing
 
         # line 1
         out = cls.indentation * indent
@@ -468,6 +468,11 @@ class help_(Command):
         if sig.comment:
             out += newline
             out += "%s" % sig.comment
+
+        # next line
+        if show_receivers and sig.receivers:
+            out += newline
+            out += "received by %s" % ", ".join(sig.receivers)
 
         return out
 
