@@ -273,7 +273,7 @@ class Command:
 
     @classmethod
     def create_parser(cls):
-        cls.parser = NotExitingArgumentParser(prog=cls.get_name(), description=__doc__, add_help=False)
+        cls.parser = NotExitingArgumentParser(prog=cls.get_name(), description=cls.__doc__, add_help=False)
         cls.init_parser(cls.parser)
 
     @classmethod
