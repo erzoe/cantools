@@ -400,11 +400,15 @@ class help_(Command):
         out = cls.indentation * indent
         out += bullet
         if order_by == cls.ORDER_BY_NAME:
-            out += "%s (0x%03x)" % (msg.name, msg.frame_id)
+            out += "%s (0x%03x" % (msg.name, msg.frame_id)
+            if show_dlc:
+                out += ", DLC=%s)" % msg.length
+            else:
+                out += ")"
         else:
             out += "0x%03x %s" % (msg.frame_id, msg.name)
-        if show_dlc:
-            out += " (DLC=%s)" % msg.length
+            if show_dlc:
+                out += " (DLC=%s)" % msg.length
         return out
 
     @classmethod
