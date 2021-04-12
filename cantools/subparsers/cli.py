@@ -489,7 +489,7 @@ class help_(Command):
             else:
                 muxed = "%s is one of %s" % (sig.multiplexer_signal, ", ".join("%s"%mid for mid in sig.multiplexer_ids))
             out += newline
-            out += "If %s" % muxed
+            out += "Available if %s" % muxed
 
         # next line
         if sig.comment:
