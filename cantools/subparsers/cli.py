@@ -470,17 +470,17 @@ class help_(Command):
         # next line
         if sig.choices:
             out += newline
-            out += "possible values: %s" % ", ".join("%s=%s" % (val,text) for val,text in sig.choices.items())
+            out += "Possible values: %s" % ", ".join("%s=%s" % (val,text) for val,text in sig.choices.items())
 
         # next line
         if show_min_max and (sig.minimum or sig.maximum):
             out += newline
-            out += "min: %s, max: %s" % (sig.minimum, sig.maximum)
+            out += "Min: %s, max: %s" % (sig.minimum, sig.maximum)
 
         # next line
         if show_bits:
             out += newline
-            out += "start bit: %s, %s bit(s) long, %s" % (sig.start, sig.length, sig.byte_order)
+            out += "Start bit: %s, %s bit(s) long, %s" % (sig.start, sig.length, sig.byte_order)
 
         # next line
         if sig.multiplexer_ids:
@@ -489,7 +489,7 @@ class help_(Command):
             else:
                 muxed = "%s is one of %s" % (sig.multiplexer_signal, ", ".join("%s"%mid for mid in sig.multiplexer_ids))
             out += newline
-            out += "if %s" % muxed
+            out += "If %s" % muxed
 
         # next line
         if sig.comment:
@@ -499,7 +499,7 @@ class help_(Command):
         # next line
         if show_receivers and sig.receivers:
             out += newline
-            out += "received by %s" % ", ".join(sig.receivers)
+            out += "Received by %s" % ", ".join(sig.receivers)
 
         return out
 
