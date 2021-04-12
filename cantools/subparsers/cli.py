@@ -74,6 +74,9 @@ class Cli:
         while True:
             try:
                 ln = self.read_line()
+                ln = ln.strip()
+                if not ln:
+                    continue
                 self.process_line(ln)
             except ParseError as e:
                 print(e)
