@@ -27,6 +27,9 @@ class Cli:
     # separator between signal name and value
     sep = "="
 
+    ARG_NODE_ID = "node_id"
+
+
     # ------- init -------
 
     def __init__(self, args):
@@ -119,6 +122,10 @@ class Cli:
 
         msg = possible_messages[0]
         data = self.parse_data(msg, args)
+        canid = msg.frame_id
+        if nodes.multiple_nodes:
+            node_id = data.pop(self.ARG_NODE_ID, None)
+            canid = nodes.create_can_id(canid, node_id)
         is_remote_frame = not data
         if data:
             self.fill_data(msg, data)
@@ -129,7 +136,7 @@ class Cli:
         else:
             data = []
         canmsg = can.Message(
-            arbitration_id = msg.frame_id,
+            arbitration_id = canid,
             is_extended_id = msg.is_extended_frame,
             is_remote_frame = is_remote_frame,
             data = data,
@@ -219,6 +226,9 @@ class Cli:
             if reo.match(sig.name):
                 yield sig
 
+        if nodes.multiple_nodes and reo.match(self.ARG_NODE_ID):
+            yield FakeSignal(self.ARG_NODE_ID)
+
     # ------- CAN bus events -------
 
     def on_receive(self, msg):
@@ -262,6 +272,12 @@ class Cli:
 
 
 # ========== utils ==========
+
+class FakeSignal:
+
+    def __init__(self, name):
+        self.name = name
+        self.choices = None
 
 class ParseError(Exception):
 
@@ -319,6 +335,53 @@ class Command:
 
 
 # ========== internal commands ==========
+
+class nodes(Command):
+
+    multiple_nodes = False
+    number_node_ids = None
+
+    @classmethod
+    def init_parser(cls, parser):
+        super().init_parser(parser)
+        parser.add_argument('num', type=Integer(0, None), nargs='?', help='number of possible node ids')
+
+    def execute(self, args):
+        cls = type(self)
+        cls.number_node_ids = args.num
+        if cls.number_node_ids == 0:
+            cls.multiple_nodes = False
+        else:
+            cls.multiple_nodes = True
+
+    @classmethod
+    def create_can_id(cls, msg_id, node_id):
+        if node_id is None:
+            node_id = 0
+
+        if node_id < 0:
+            raise ParseError('{cls.cli.ARG_NODE_ID} cannot be negative'.format(cls=cls))
+        elif cls.number_node_ids is not None and node_id >= cls.number_node_ids:
+            raise ParseError('{cls.cli.ARG_NODE_ID} must be smaller than {cls.number_node_ids}'.format(cls=cls))
+
+        return msg_id + node_id
+
+    @classmethod
+    def split_can_id(cls, msg_id):
+        if not cls.multiple_nodes:
+            node_id = None
+        elif cls.number_node_ids is None:
+            known_message_ids = [msg.frame_id for msg in cls.cli.dbc.messages]
+            node_id = 0
+            while msg_id not in known_message_ids:
+                msg_id -= 1
+                node_id += 1
+        else:
+            node_id = msg_id % cls.number_node_ids
+            msg_id = msg_id - node_id
+
+        return (msg_id, node_id)
+
 
 class quit(Command):
 
