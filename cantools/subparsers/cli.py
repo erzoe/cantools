@@ -6,8 +6,7 @@ import can
 import cantools
 from argparse_addons import Integer
 from .. import database
-from .utils import format_message
-from .utils import format_multiplexed_name
+from . import utils
 
 
 class QuitException(Exception):
@@ -141,7 +140,9 @@ class Cli:
             is_remote_frame = is_remote_frame,
             data = data,
         )
-        print(canmsg)
+        out = output.format_tx_message(canmsg)
+        if out:
+            print(out)
         self.bus.send(canmsg)
 
 
@@ -232,9 +233,11 @@ class Cli:
     # ------- CAN bus events -------
 
     def on_receive(self, msg):
-        print('\r', end='')
-        print(msg)
-        print(self.prompt, end='', flush=True)
+        out = output.format_rx_message(msg)
+        if out:
+            print('\r', end='')
+            print(out)
+            print(self.prompt, end='', flush=True)
 
     def on_error(self, error):
         print('\r', end='')
@@ -381,6 +384,124 @@ class nodes(Command):
             msg_id = msg_id - node_id
 
         return (msg_id, node_id)
+
+
+class output(Command):
+
+    aliases = ['out']
+
+    rx_raw = False
+    rx_pretty = True
+    rx_single_line = True
+    rx_decode_choices = False
+
+    tx_raw = False
+    tx_pretty = True
+    tx_single_line = True
+    tx_decode_choices = False
+
+    rx_prefix = "[rx] "
+    tx_prefix = "[tx] "
+
+    @classmethod
+    def init_parser(cls, parser):
+        super().init_parser(parser)
+        arggroup = parser.add_argument_group('direction')
+        arggroup.add_argument('--tx', action='store_true', help='apply the format options to transmitted messages')
+        arggroup.add_argument('--rx', action='store_true', help='apply the format options to received messages')
+
+        arggroup = parser.add_argument_group('format')
+        arggroup.add_argument('-r', '--raw', action='store_true', help='stringify the python-can message object')
+        arggroup.add_argument('-p', '--pretty', action='store_true', help='format message with cantools')
+        arggroup.add_argument('-n', '--none', action='store_true', help='no output')
+
+        arggroup = parser.add_argument_group('pretty options')
+        arggroup.add_argument('-m', '--multiline', action='store_true')
+        arggroup.add_argument('-c', '--no-choice-names', action='store_true')
+
+    def execute(self, args):
+        if not args.tx and not args.rx:
+            args.tx = True
+            args.rx = True
+        if args.multiline:
+            args.pretty = True
+        if args.no_choice_names:
+            args.pretty = True
+        if not args.raw and not args.pretty and not args.none:
+            args.pretty = True
+
+        cls = type(self)
+        if args.tx:
+            cls.tx_raw = args.raw
+            cls.tx_pretty = args.pretty
+            cls.tx_single_line = not args.multiline
+            cls.tx_decode_choices = not args.no_choice_names
+        if args.rx:
+            cls.rx_raw = args.raw
+            cls.rx_pretty = args.pretty
+            cls.rx_single_line = not args.multiline
+            cls.rx_decode_choices = not args.no_choice_names
+
+    @classmethod
+    def format_tx_message(cls, canmsg):
+        out = []
+        if cls.tx_raw:
+            out.append(str(canmsg))
+        if cls.tx_pretty:
+            out.extend(cls.format_pretty_message(canmsg, cls.tx_decode_choices, cls.tx_single_line).splitlines())
+
+        if out:
+            indent = " " * len(cls.tx_prefix)
+            sep = "\n" + indent
+            return cls.tx_prefix + sep.join(out)
+
+        return ""
+
+    @classmethod
+    def format_rx_message(cls, canmsg):
+        out = []
+        if cls.rx_raw:
+            out.append(str(canmsg))
+        if cls.rx_pretty:
+            out.extend(cls.format_pretty_message(canmsg, cls.rx_decode_choices, cls.rx_single_line).splitlines())
+
+        if out:
+            indent = " " * len(cls.rx_prefix)
+            sep = "\n" + indent
+            return cls.rx_prefix + sep.join(out)
+
+        return ""
+
+    @classmethod
+    def format_pretty_message(cls, canmsg, decode_choices, single_line):
+        msgid, node_id = nodes.split_can_id(canmsg.arbitration_id)
+        try:
+            msg = cls.cli.dbc.get_message_by_frame_id(msgid)
+        except KeyError:
+            return 'unknown message: {canmsg}'.format(canmsg=cls.format_message_dump(canmsg))
+
+        try:
+            decoded_signals = msg.decode(canmsg.data, decode_choices)
+        except cantools.database.errors.EncodeError as e:
+            return 'failed to decode data for {msg.name} ({canmsg}): {error}'.format(canmsg=cls.format_message_dump(canmsg), msg=msg, error=e)
+
+        formatted_signals = utils._format_signals(msg, decoded_signals)
+
+        if single_line:
+            out = utils._format_message_single_line(msg, formatted_signals)
+        else:
+            out = utils._format_message_multi_line(msg, formatted_signals)
+
+        return out.lstrip()
+
+    @classmethod
+    def format_message_dump(cls, canmsg):
+        out = "0x{canmsg.arbitration_id:03X} [{canmsg.dlc}] ".format(canmsg=canmsg)
+        if canmsg.is_remote_frame:
+            out += "remote request"
+        else:
+            out += " ".join("%02X"%b for b in canmsg.data)
+        return out
 
 
 class quit(Command):
