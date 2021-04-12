@@ -117,6 +117,7 @@ class Cli:
         data = self.parse_data(msg, args)
         is_remote_frame = not data
         if data:
+            self.fill_data(msg, data)
             data = msg.encode(data)
         else:
             data = []
@@ -167,6 +168,14 @@ class Cli:
             data[sig.name] = val
 
         return data
+
+    def fill_data(self, msg, data, default=0):
+        for sig in msg.signals:
+            if sig.name not in data:
+                if sig.minimum is not None and default < sig.minimum:
+                    data[sig.name] = sig.minimum
+                else:
+                    data[sig.name] = default
 
     def find_messages(self, cmd_input):
         if self.is_int(cmd_input):
