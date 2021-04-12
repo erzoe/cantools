@@ -3,6 +3,7 @@ import argparse
 import readline
 
 import can
+import cantools
 from argparse_addons import Integer
 from .. import database
 from .utils import format_message
@@ -118,7 +119,10 @@ class Cli:
         is_remote_frame = not data
         if data:
             self.fill_data(msg, data)
-            data = msg.encode(data)
+            try:
+                data = msg.encode(data)
+            except cantools.database.errors.EncodeError as e:
+                raise ParseError(e)
         else:
             data = []
         canmsg = can.Message(
