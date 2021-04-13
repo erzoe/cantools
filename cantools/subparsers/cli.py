@@ -480,9 +480,12 @@ class output(Command):
         except KeyError:
             return 'unknown message: {canmsg}'.format(canmsg=cls.format_message_dump(canmsg))
 
+        if canmsg.is_remote_frame:
+            return '{msg.name} #remote request'.format(msg=msg)
+
         try:
             decoded_signals = msg.decode(canmsg.data, decode_choices)
-        except cantools.database.errors.EncodeError as e:
+        except Exception as e:
             return 'failed to decode data for {msg.name} ({canmsg}): {error}'.format(canmsg=cls.format_message_dump(canmsg), msg=msg, error=e)
 
         formatted_signals = utils._format_signals(msg, decoded_signals)
