@@ -1,6 +1,9 @@
+import os
 import re
+import datetime
 import argparse
 import readline
+import atexit
 
 import can
 import cantools
@@ -67,7 +70,8 @@ class Cli:
                                        args.channel))
 
     def register_bus_listener(self, bus):
-        can.Notifier(bus, [CanBusListener(self.on_receive, self.on_error)])
+        self.notifier = can.Notifier(bus, [CanBusListener(self.on_receive, self.on_error)])
+        atexit.register(self.notifier.stop)
 
 
     # ------- main -------
@@ -338,6 +342,49 @@ class Command:
 
 
 # ========== internal commands ==========
+
+class log(Command):
+
+    #TODO: log sent messages
+    #TODO: stop logging
+
+    DEFAULT_LOG_PATTERN = "%Y-%m-%d_%H-%M"
+
+    @classmethod
+    def init_parser(cls, parser):
+        super().init_parser(parser)
+        parser.add_argument('file', nargs='?')
+        parser.add_argument('--blf', action='store_true', help='log CAN messages in CANalyzer readable BLF format')
+        parser.add_argument('--asc', action='store_true', help='log CAN messages in CANalyzer readable ASC format')
+
+    def execute(self, args):
+        cls = type(self)
+
+        if not args.blf and not args.asc:
+            args.blf = True
+            args.asc = True
+
+        if args.blf:
+            cls.append_log_listener(can.BLFWriter, args, 'blf')
+        if args.asc:
+            cls.append_log_listener(can.ASCWriter, args, 'asc')
+
+    @classmethod
+    def append_log_listener(cls, writer_type, args, ext):
+        fn = args.file
+        if not fn:
+            fn = cls.get_default_log_name()
+        elif os.path.isdir(fn):
+            fn = os.path.join(fn, cls.get_default_log_name())
+        fn += os.path.extsep + ext
+
+        l = writer_type(fn)
+        cls.cli.notifier.add_listener(l)
+
+    @classmethod
+    def get_default_log_name(cls):
+        return datetime.datetime.now().strftime(cls.DEFAULT_LOG_PATTERN)
+
 
 class nodes(Command):
 
