@@ -356,6 +356,8 @@ class log(Command):
         parser.add_argument('file', nargs='?')
         parser.add_argument('--blf', action='store_true', help='log CAN messages in CANalyzer readable BLF format')
         parser.add_argument('--asc', action='store_true', help='log CAN messages in CANalyzer readable ASC format')
+        parser.add_argument('-p', '--prefix', default='', help='a prefix to prepend to the file name')
+        parser.add_argument('-s', '--suffix', default='', help='a suffix to append to the file name (before the extension)')
 
     def execute(self, args):
         cls = type(self)
@@ -376,6 +378,10 @@ class log(Command):
             fn = cls.get_default_log_name()
         elif os.path.isdir(fn):
             fn = os.path.join(fn, cls.get_default_log_name())
+        if args.prefix:
+            fn = args.prefix.join(os.path.split(fn))
+        if args.suffix:
+            fn += args.suffix
         fn += os.path.extsep + ext
 
         l = writer_type(fn)
