@@ -394,6 +394,36 @@ class log(Command):
 
 class nodes(Command):
 
+    '''
+    If you have CAN devices with a (configurable) node id
+    where the node id is encoded in the last n bits of the frame id (LSB side)
+    and you are too lazy to specify every message for each possible node id in the dbc file
+    this command can help you.
+
+    Example: you have one or more devices/nodes sending the following messages
+    (where X represents an arbitrary hex digit):
+    - 0x01X = Message1 (0x010 = Message1 sent from node 0, 0x011 = Message1 sent from node 1, ...)
+    - 0x02X = Message2 (0x020 = Message2 sent from node 0, 0x021 = Message2 sent from node 1, ...)
+    but you have only specified
+    - 0x010 = Message1
+    - 0x020 = Message2
+    in your dbc file.
+
+    After calling this command you can pass a node_id to every message you send.
+    This node_id will be added to the message id before sending the message.
+    When receiving messages the frame id of a received message will first be split
+    into message id and node id. Only the message id will be used to look up the
+    message in the dbc file. The node id will be printed in the data of the message.
+
+    For splitting up the frame id properly the number of possible node ids is needed.
+    You can pass that as an argument to this command. Don't forget to count node 0.
+    (In the above example with nodes from 0x0 to 0xF this number is 0x10.)
+    If you don't specify this number the CAN message with the next smaller frame id
+    from the dbc file is assumed. This can be wrong if you receive undocumented messages.
+
+    You can disable this feature again by setting the number of possible node ids to 0.
+    '''
+
     multiple_nodes = False
     number_node_ids = None
 
