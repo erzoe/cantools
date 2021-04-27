@@ -534,7 +534,10 @@ class output(Command):
             return 'unknown message: {canmsg}'.format(canmsg=cls.format_message_dump(canmsg))
 
         if canmsg.is_remote_frame:
-            return '{msg.name} #remote request'.format(msg=msg)
+            if node_id is not None:
+                return '{msg.name}(node_id: {node_id}) #remote request'.format(msg=msg, node_id=node_id)
+            else:
+                return '{msg.name} #remote request'.format(msg=msg)
 
         try:
             decoded_signals = msg.decode(canmsg.data, decode_choices)
@@ -542,6 +545,8 @@ class output(Command):
             return 'failed to decode data for {msg.name} ({canmsg}): {error}'.format(canmsg=cls.format_message_dump(canmsg), msg=msg, error=e)
 
         formatted_signals = utils._format_signals(msg, decoded_signals)
+        if node_id is not None:
+            formatted_signals.insert(0, "node_id: %s" % node_id)
 
         if single_line:
             out = utils._format_message_single_line(msg, formatted_signals)
