@@ -6,13 +6,19 @@ from .. import database
 from .. import logreader
 from .utils import format_message_by_frame_id
 
+STDIN = '-'
+
 def _do_decode(args):
     dbase = database.load_file(args.database,
                                encoding=args.encoding,
                                frame_id_mask=args.frame_id_mask,
                                strict=not args.no_strict)
     decode_choices = not args.no_decode_choices
-    parser = logreader.Parser(sys.stdin)
+    if args.file == STDIN:
+        f = sys.stdin
+    else:
+        f = args.file
+    parser = logreader.Parser(f)
     for line, frame in parser.iterlines(keep_unknowns=True):
         if frame is not None:
             line += ' ::'
@@ -55,4 +61,9 @@ def add_subparser(subparsers):
     decode_parser.add_argument(
         'database',
         help='Database file.')
+    decode_parser.add_argument(
+        'file',
+        nargs='?',
+        default = STDIN,
+        help='The log file to read. Defaults to stdin.')
     decode_parser.set_defaults(func=_do_decode)

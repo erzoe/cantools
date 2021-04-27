@@ -2,6 +2,7 @@ import re
 import enum
 import binascii
 import datetime
+import can
 
 
 class TimestampFormat(enum.Enum):
@@ -21,7 +22,8 @@ class DataFrame:
                  frame_id: int,
                  data: bytes,
                  timestamp: datetime.datetime,
-                 timestamp_format: TimestampFormat):
+                 timestamp_format: TimestampFormat,
+                 length: int = None):
         """Constructor for DataFrame
 
         :param channel: A string representation of the channel, eg. 'can0'
@@ -29,10 +31,14 @@ class DataFrame:
         :param timestamp: A timestamp, datetime.datetime if absolute, or
             datetime.timedelta if relative, None if missing
         :param timestamp_format: The format of the timestamp
+        :param length: The message data length in bytes
         : """
+        if length is None:
+            length = len(data)
         self.channel = channel
         self.frame_id = frame_id
         self.data = data
+        self.length = length
         self.timestamp = timestamp
         self.timestamp_format = timestamp_format
 
@@ -139,6 +145,18 @@ class Parser:
         self.stream = stream
         self.pattern = None
 
+        if isinstance(stream, str):
+            stream_lower = stream.lower()
+            if stream_lower.endswith('.blf'):
+                self.reader = can.io.blf.BLFReader(stream)
+            elif stream_lower.endswith('.asc'):
+                self.reader = can.io.asc.ASCReader(stream)
+            elif stream_lower.endswith('.sqlite'):
+                self.reader = can.io.sqlite.SqliteReader(stream)
+            else:
+                self.reader = can.io.log.CanutilsLogReader(stream)
+            self.iterlines = self._reader_iterlines
+
     @staticmethod
     def detect_pattern(line):
         for p in [CandumpDefaultPattern, CandumpTimestampedPattern, CandumpDefaultLogPattern, CandumpAbsoluteLogPattern]:
@@ -173,6 +191,32 @@ class Parser:
                 yield nl, None
             else:
                 continue
+
+    def _reader_iterlines(self, keep_unknowns=False):
+        """Returns an generator that yields (str, DataFrame) tuples with the
+        raw log entry and a parsed log entry. If keep_unknowns=True, (str,
+        None) tuples will be returned for log entries that couldn't be decoded.
+        If keep_unknowns=False, non-parseable log entries is discarded.
+        """
+        try:
+            for canmsg in self.reader:
+                frame = self.canmsg_to_frame(canmsg)
+                fake_ln = "({frame.timestamp})  {frame.channel}  {frame.frame_id:03X}   [{frame.length}]  {data}".format(
+                    frame=frame, data=" ".join("%02X" % byte for byte in frame.data))
+                yield fake_ln, frame
+        finally:
+            if hasattr(self.reader, 'close'):
+                self.reader.close()
+
+    def canmsg_to_frame(self, canmsg):
+        return DataFrame(
+            channel = canmsg.channel,
+            frame_id = canmsg.arbitration_id,
+            data = canmsg.data,
+            length = canmsg.dlc,
+            timestamp = datetime.datetime.fromtimestamp(canmsg.timestamp),
+            timestamp_format = TimestampFormat.ABSOLUTE,
+        )
 
     def __iter__(self):
         """Returns DataFrame log entries. Non-parseable log entries is
