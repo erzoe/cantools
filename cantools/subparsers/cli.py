@@ -22,6 +22,10 @@ class CanBusListener(can.Listener):
         if on_error:
             self.on_error = on_error
 
+def join_iter(*iterables):
+    for i in iterables:
+        yield from i
+
 class Cli:
 
     list_item_choice  = "- {val}: {key}"
@@ -30,6 +34,9 @@ class Cli:
     sep = "="
 
     ARG_NODE_ID = "node_id"
+
+    START = "^"
+    END = "$"
 
 
     # ------- init -------
@@ -168,25 +175,30 @@ class Cli:
             else:
                 raise ParseError('positional argument follows keyword argument')
 
-            if sig.choices:
-                val = sig.choice_string_to_number(strval)
-            else:
-                val = None
-            if val is None:
-                try:
-                    val = self.parse_number(strval)
-                except ParseError as e:
-                    msg = str(e)
-                    if sig.choices:
-                        if not msg.endswith('.'):
-                            msg += '.'
-                        msg += ' valid choices are:\n'
-                        msg += '\n'.join(self.list_item_choice.format(key=key, val=val) for val, key in sig.choices.items())
-                    raise ParseError(msg)
+
+            try:
+                val = self.parse_number(strval)
+            except ParseError as e:
+                if sig.choices:
+                    choice = self.find_value_by_name(msg, sig, strval)
+                    val = choice[0]
+                else:
+                    raise e
 
             data[sig.name] = val
 
         return data
+
+    def find_value_by_name(self, msg, sig, val):
+        possibilities = list(self.find_in_list(val, sig.choices.items(), key=lambda x: x[1]))
+        n = len(possibilities)
+        if n <= 0:
+            raise ParseError('unknown value {val!r} for {msg.name}.{sig.name}'.format(msg=msg, sig=sig, val=val))
+        elif n > 1:
+            error = 'value {val!r} for {msg.name}.{sig.name} is ambiguous:\n'.format(msg=msg, sig=sig, val=val)
+            error += '\n'.join(help_.format_choice(choice) for choice in sorted(possibilities, key=lambda c: c[1]))
+            raise ParseError(error)
+        return possibilities[0]
 
     def fill_data(self, msg, data, default=0):
         for sig in msg.signals:
@@ -209,10 +221,7 @@ class Cli:
                 return
 
     def find_messages_by_name(self, cmd_input):
-        reo = re.compile('.*'+re.escape(cmd_input)+'.*', re.I)
-        for msg in self.dbc.messages:
-            if reo.match(msg.name):
-                yield msg
+        yield from self.find_in_list(cmd_input, self.dbc.messages)
 
     def find_signal_by_name(self, msg, name):
         signals = list(self.find_signals_by_name(msg, name))
@@ -226,13 +235,29 @@ class Cli:
         return signals[0]
 
     def find_signals_by_name(self, msg, name):
-        reo = re.compile('.*'+re.escape(name)+'.*', re.I)
-        for sig in msg.signals:
-            if reo.match(sig.name):
-                yield sig
+        signals = msg.signals
+        if nodes.multiple_nodes:
+            signals = join_iter(signals, [FakeSignal(self.ARG_NODE_ID)])
+        yield from self.find_in_list(name, signals)
 
-        if nodes.multiple_nodes and reo.match(self.ARG_NODE_ID):
-            yield FakeSignal(self.ARG_NODE_ID)
+    def find_in_list(self, name, l, key=lambda x: x.name):
+        if name.startswith(self.START):
+            name = name[len(self.START):]
+            re_prefix = ''
+        else:
+            re_prefix = '.*'
+        if name.endswith(self.END):
+            name = name[:-len(self.END)]
+            re_suffix = '$'
+        else:
+            re_suffix = ''
+        re_name = re.escape(name)
+        reo = re.compile(re_prefix+re_name+re_suffix, re.I)
+
+        for item in l:
+            if reo.match(key(item)):
+                yield item
+
 
     # ------- CAN bus events -------
 
@@ -736,6 +761,9 @@ class help_(Command):
         out += bullet
         out += "%s" % sig.name
 
+        if isinstance(sig, FakeSignal):
+            return out
+
         if sig.is_multiplexer:
             out += " [multiplexer]"
 
@@ -792,6 +820,13 @@ class help_(Command):
             out += newline
             out += "Received by %s" % ", ".join(sig.receivers)
 
+        return out
+
+    @classmethod
+    def format_choice(cls, choice, indent=0, bullet="- ", multiline=True):
+        out = cls.indentation * indent
+        out += bullet
+        out += "{val[0]}: {val[1]}".format(val=choice)
         return out
 
 
