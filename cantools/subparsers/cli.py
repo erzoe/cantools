@@ -34,6 +34,8 @@ class Cli:
     sep = "="
 
     ARG_NODE_ID = "node_id"
+    FLAGS_FORCE = ("-f", "--force")
+    KEY_FORCE = ".force"
 
     START = "^"
     END = "$"
@@ -132,6 +134,7 @@ class Cli:
 
         msg = possible_messages[0]
         data = self.parse_data(msg, args)
+        force = data.pop(self.KEY_FORCE, False)
         canid = msg.frame_id
         if nodes.multiple_nodes:
             node_id = data.pop(self.ARG_NODE_ID, None)
@@ -140,7 +143,7 @@ class Cli:
         if data:
             self.fill_data(msg, data)
             try:
-                data = msg.encode(data)
+                data = msg.encode(data, strict=not force)
             except cantools.database.errors.EncodeError as e:
                 raise ParseError(e)
         else:
@@ -161,8 +164,12 @@ class Cli:
         '''args: a list of strings representing the data. return: dict'''
         data = {}
         positional = True
-        for i, arg in enumerate(args):
-            if self.sep in arg:
+        i = 0
+        for arg in args:
+            if arg in self.FLAGS_FORCE:
+                data[self.KEY_FORCE] = True
+                continue
+            elif self.sep in arg:
                 key, strval = arg.split(self.sep)
                 sig = self.find_signal_by_name(msg, key)
                 positional = False
@@ -186,6 +193,7 @@ class Cli:
                     raise e
 
             data[sig.name] = val
+            i += 1
 
         return data
 
@@ -648,6 +656,10 @@ class help_(Command):
     name = "help"
     aliases = ["h", "?"]
 
+    send_message_flags = [
+        (Cli.FLAGS_FORCE, "Send the message even if one of it's signals exceeds it's min or max value")
+    ]
+
     @classmethod
     def init_parser(cls, parser):
         super().init_parser(parser)
@@ -704,12 +716,15 @@ class help_(Command):
             cls.print_message_help(msg, indent=indent, bullet=bullet, show_dlc=show_dlc, show_transmitter=show_transmitter, order_by=order_by, descending=descending, signalkw=signalkw)
 
     @classmethod
-    def print_message_help(cls, msg, indent=0, bullet="", show_dlc=True, show_transmitter=False, order_by=ORDER_BY_ID, descending=False, signalkw={}):
+    def print_message_help(cls, msg, indent=0, bullet="", show_dlc=True, show_transmitter=False, show_flags=True, order_by=ORDER_BY_ID, descending=False, signalkw={}):
         print(cls.format_message(msg, bullet=bullet, show_dlc=show_dlc, show_transmitter=show_transmitter, order_by=order_by, descending=descending, indent=indent))
         if signalkw is None:
             return
         for sig in msg.signals:
             print(cls.format_signal(sig, indent=indent+1, **signalkw))
+        if show_flags:
+            for flags, helpstr in cls.send_message_flags:
+                print(cls.format_flag(flags, helpstr, indent=indent+1))
 
 
     @classmethod
@@ -827,6 +842,14 @@ class help_(Command):
         out = cls.indentation * indent
         out += bullet
         out += "{val[0]}: {val[1]}".format(val=choice)
+        return out
+
+    @classmethod
+    def format_flag(cls, flags, helpstr, indent=0, bullet="", multiline=True):
+        flags = ", ".join(flags)
+        out = cls.indentation * indent
+        out += bullet
+        out += "%s: %s" % (flags, helpstr)
         return out
 
 
