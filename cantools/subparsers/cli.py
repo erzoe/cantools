@@ -777,14 +777,9 @@ class help_(Command):
             else:
                 out += " int"
 
-        if sig.scale != 1 or sig.unit:
+        if sig.unit:
             out += " in "
-            if sig.scale != 1:
-                out += "%s" % sig.scale
-            if sig.unit:
-                out += "%s" % sig.unit
-        if sig.offset:
-            out += ", offset: %s" % sig.offset
+            out += "%s" % sig.unit
 
         # next line
         if sig.choices:
@@ -800,6 +795,11 @@ class help_(Command):
         if show_bits:
             out += newline
             out += "Start bit: %s, %s bit(s) long, %s" % (sig.start, sig.length, sig.byte_order)
+
+        # next line
+        if show_bits:
+            out += newline
+            out += "Factor: %s, offset: %s" % (sig.scale, sig.offset)
 
         # next line
         if sig.multiplexer_ids:
