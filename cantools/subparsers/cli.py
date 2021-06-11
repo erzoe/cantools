@@ -602,8 +602,11 @@ class output(Command):
             else:
                 return '{msg.name} #remote request'.format(msg=msg)
 
+        data = canmsg.data.copy()
+        while len(data) < msg.length:
+            data.append(0)
         try:
-            decoded_signals = msg.decode(canmsg.data, decode_choices)
+            decoded_signals = msg.decode(data, decode_choices)
         except Exception as e:
             return 'failed to decode data for {msg.name} ({canmsg}): {error}'.format(canmsg=cls.format_message_dump(canmsg), msg=msg, error=e)
 
