@@ -592,7 +592,7 @@ class output(Command):
     def format_pretty_message(cls, canmsg, decode_choices, single_line):
         msgid, node_id = nodes.split_can_id(canmsg.arbitration_id)
         try:
-            msg = cls.cli.dbc.get_message_by_frame_id(msgid)
+            msg = cls.get_message_by_frame_id(msgid)
         except KeyError:
             return 'unknown message: {canmsg}'.format(canmsg=cls.format_message_dump(canmsg))
 
@@ -620,6 +620,18 @@ class output(Command):
             out = utils._format_message_multi_line(msg, formatted_signals)
 
         return out.lstrip()
+
+    @classmethod
+    def get_message_by_frame_id(cls, msgid):
+        try:
+            return cls.cli.dbc.get_message_by_frame_id(msgid)
+        except KeyError as excp:
+            if nodes.multiple_nodes:
+                for msg in cls.cli.dbc.messages:
+                    msg_msgid, msg_nodeid = nodes.split_can_id(msg.frame_id)
+                    if msg_msgid == msgid:
+                        return msg
+            raise excp
 
     @classmethod
     def format_message_dump(cls, canmsg):
