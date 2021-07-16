@@ -689,6 +689,7 @@ class help_(Command):
             args.bits = True
             args.receivers = True
             args.transmitters = True
+        cmdlistkw = dict()
         msglistkw = dict(order_by=args.order_by, descending=args.descending, show_transmitter=args.transmitters)
         signalkw = dict(multiline=args.multiline, show_datatype=args.datatype, show_min_max=args.min_max, show_bits=args.bits, show_receivers=args.receivers)
         if args.msg == '*':
@@ -705,7 +706,26 @@ class help_(Command):
                 msg = messages[0]
                 self.print_message_help(msg, bullet="", **msglistkw, signalkw=signalkw)
         else:
+            print("defined messages:")
             self.print_message_list(self.cli.dbc.messages, **msglistkw)
+            print("")
+            print("defined commands:")
+            self.print_command_list(**cmdlistkw)
+
+    @classmethod
+    def print_command_list(cls, indent=0, bullet="- "):
+        commands = [cmd for cmd in globals().values() if Cli.issubclass(cmd, Command)]
+        for cmd in sorted(commands, key=lambda c: c.get_name()):
+            print(cls.format_command_help(cmd, indent=indent, bullet=bullet))
+
+    @classmethod
+    def format_command_help(cls, cmd, indent=0, bullet="- "):
+        out = cls.indentation * indent
+        out += bullet
+
+        out += "%s" % cmd.get_name()
+
+        return out
 
 
     @classmethod
