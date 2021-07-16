@@ -708,9 +708,13 @@ class help_(Command):
         else:
             print("defined messages:")
             self.print_message_list(self.cli.dbc.messages, **msglistkw)
+            print("To get help for a message type `help <msg>`")
+            print("where <msg> is the message id or part of the message name.")
             print("")
             print("defined commands:")
             self.print_command_list(**cmdlistkw)
+            print("To get help for a command type `<cmd> --help`")
+            print("where <cmd> is the command name or one of it's aliases.")
 
     @classmethod
     def print_command_list(cls, indent=0, bullet="- "):
