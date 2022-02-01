@@ -7,6 +7,7 @@ import atexit
 
 import can
 import cantools
+from . import can_setup
 from argparse_addons import Integer
 from .. import database
 from . import utils
@@ -50,6 +51,7 @@ class Cli:
                                          strict=not args.no_strict)
 
         self.bus = self.create_bus(args)
+        print("connected to %s" % args.channel)
         self.register_bus_listener(self.bus)
         self.prompt = args.prompt
 
@@ -375,6 +377,31 @@ class Command:
 
 
 # ========== internal commands ==========
+
+class bus(Command):
+
+    '''
+    Select a CAN bus
+    '''
+
+    @classmethod
+    def init_parser(cls, parser):
+        super().init_parser(parser)
+        parser.add_argument('channel', help='e.g. can0, see `ip a | grep can`')
+        parser.add_argument('bitrate', help='e.g. 250k, 500k')
+
+    def execute(self, args):
+        self.cli.notifier.stop()
+        try:
+            self.cli.bus.shutdown()
+        except:
+            pass
+        try:
+            self.cli.bus = can_setup.init(channel=args.channel, bitrate=args.bitrate)
+            self.cli.register_bus_listener(self.cli.bus)
+        except:
+            print("Failed to start bus %s with a bitrate of %s" % (args.channel, args.bitrate))
+
 
 class log(Command):
 
