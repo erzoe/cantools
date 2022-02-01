@@ -54,6 +54,7 @@ class Cli:
         print("connected to %s" % args.channel)
         self.register_bus_listener(self.bus)
         self.prompt = args.prompt
+        self.arbitration_ids_blacklist = set()
 
         Command.cli = self
         self.internal_commands = {}
@@ -602,6 +603,9 @@ class output(Command):
 
     @classmethod
     def format_rx_message(cls, canmsg):
+        if canmsg.arbitration_id in cls.cli.arbitration_ids_blacklist:
+            return ""
+
         out = []
         if cls.rx_raw:
             out.append(str(canmsg))
@@ -618,6 +622,9 @@ class output(Command):
     @classmethod
     def format_pretty_message(cls, canmsg, decode_choices, single_line):
         msgid, node_id = nodes.split_can_id(canmsg.arbitration_id)
+        if msgid in cls.cli.arbitration_ids_blacklist:
+            return ""
+
         try:
             msg = cls.get_message_by_frame_id(msgid)
         except KeyError:
@@ -668,6 +675,63 @@ class output(Command):
         else:
             out += " ".join("%02X"%b for b in canmsg.data)
         return out
+
+
+class filter(Command):
+
+    ALL = '*'
+
+    aliases = ["-"]
+
+    @classmethod
+    def init_parser(cls, parser):
+        super().init_parser(parser)
+        parser.add_argument('messages', nargs='*')
+
+    def execute(self, args):
+        n = len(self.cli.arbitration_ids_blacklist)
+        if not args.messages:
+            print(f"{n} messages are in blacklist")
+            return
+
+        for msg_pattern in args.messages:
+            if msg_pattern == filter.ALL:
+                for msg in self.cli.dbc.messages:
+                    self.cli.arbitration_ids_blacklist.add(msg.frame_id)
+                break
+            else:
+                for msg in self.cli.find_messages(msg_pattern):
+                    self.cli.arbitration_ids_blacklist.add(msg.frame_id)
+        n = len(self.cli.arbitration_ids_blacklist) - n
+        
+        print(f"{n} messages added to blacklist")
+
+
+class unfilter(Command):
+
+    aliases = ["+"]
+
+    @classmethod
+    def init_parser(cls, parser):
+        super().init_parser(parser)
+        parser.add_argument('messages', nargs='*')
+
+    def execute(self, args):
+        n = len(self.cli.arbitration_ids_blacklist)
+        if not args.messages:
+            print(f"{n} messages are in blacklist")
+            return
+
+        for msg_pattern in args.messages:
+            if msg_pattern == filter.ALL:
+                self.cli.arbitration_ids_blacklist.clear()
+                break
+            else:
+                for msg in self.cli.find_messages(msg_pattern):
+                    self.cli.arbitration_ids_blacklist.remove(msg.frame_id)
+        n = n - len(self.cli.arbitration_ids_blacklist)
+
+        print(f"{n} messages removed from blacklist")
 
 
 class quit(Command):
